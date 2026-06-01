@@ -1,0 +1,12 @@
+{
+  "name": "posthog-tap",
+  "version": "0.1.0",
+  "description": "Local PostHog ingestion sink + payload inspector for verifying analytics integrations and auditing event payloads for PII before they ship.",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "license": "MIT",
+  "private": false
+}

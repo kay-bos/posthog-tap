@@ -1,0 +1,34 @@
+name: publish
+
+# Build the container and push it to GitHub Container Registry so dev stacks
+# (e.g. consertus-pmis docker-compose) can pull ghcr.io/kay-bos/posthog-tap.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/kay-bos/posthog-tap:latest
+            ghcr.io/kay-bos/posthog-tap:${{ github.sha }}
