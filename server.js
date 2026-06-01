@@ -328,6 +328,12 @@ const server = http.createServer(async (req, res) => {
       }
       return sendJson(res, 200, REMOTE_CONFIG);
     }
+    // PostHog tries to load optional helper scripts (surveys, toolbar, …) from
+    // /static/*.js. Serve an empty module so the SDK doesn't log load errors.
+    if (/^\/static\/[^/]+\.js$/.test(path)) {
+      res.writeHead(200, { ...CORS, "Content-Type": "application/javascript" });
+      return res.end("/* posthog-tap: optional script stubbed */\n");
+    }
     return sendJson(res, 404, { error: "not found" });
   }
 
