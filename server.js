@@ -183,13 +183,41 @@ const DECIDE = {
   config: { enable_collect_everything: false },
   isAuthenticated: false,
   supportedCompression: ["gzip", "gzip-js"],
+  flags: {},
   featureFlags: {},
   featureFlagPayloads: {},
+  errorsWhileComputingFlags: false,
   sessionRecording: false,
+  captureDeadClicks: false,
+  capturePerformance: false,
   autocaptureExceptions: false,
   autocapture_opt_out: true,
+  heatmaps: false,
+  surveys: false,
   toolbarParams: {},
   siteApps: [],
+  quotaLimited: [],
+};
+
+// Remote-config response for GET /array/<token>/config. posthog-js fetches
+// this during bootstrap and — critically — some versions buffer all captured
+// events until it resolves successfully. Returning 404 here makes the SDK hold
+// events forever (init + /flags still work, but nothing is ever sent). Serving
+// a valid 200 lets capture proceed, exactly as against real PostHog.
+const REMOTE_CONFIG = {
+  supportedCompression: ["gzip", "gzip-js"],
+  hasFeatureFlags: false,
+  captureDeadClicks: false,
+  capturePerformance: false,
+  autocapture_opt_out: true,
+  autocaptureExceptions: false,
+  sessionRecording: false,
+  heatmaps: false,
+  surveys: false,
+  defaultIdentifiedOnly: true,
+  siteApps: [],
+  elementsChainAsString: true,
+  analytics: { endpoint: "/i/v0/e/" },
 };
 
 // --- HTML UI -----------------------------------------------------------------
@@ -289,6 +317,16 @@ const server = http.createServer(async (req, res) => {
     if (path === "/healthz") {
       res.writeHead(200, { ...CORS, "Content-Type": "text/plain" });
       return res.end("ok");
+    }
+    // PostHog remote-config bootstrap endpoints (see REMOTE_CONFIG above).
+    const arrayCfg = path.match(/^\/array\/[^/]+\/config(\.js)?$/);
+    if (arrayCfg) {
+      if (arrayCfg[1]) {
+        // `config.js` is loaded as a <script>; an empty valid module is enough.
+        res.writeHead(200, { ...CORS, "Content-Type": "application/javascript" });
+        return res.end("/* posthog-tap: no remote config */\n");
+      }
+      return sendJson(res, 200, REMOTE_CONFIG);
     }
     return sendJson(res, 404, { error: "not found" });
   }
