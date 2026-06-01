@@ -35,6 +35,24 @@ const EMAIL_RE = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i;
 const SENSITIVE_KEY_RE =
   /(e[-_]?mail|first[-_]?name|last[-_]?name|full[-_]?name|file[-_]?name|filename|comment|free[-_]?text|contract|amount|price|cost|url|address|phone|ssn|password|secret|api[-_]?key|token)/i;
 const FREE_TEXT_MAX = 256;
+// PostHog attaches its own system metadata to every event ($browser, $os,
+// $current_url, $device_id, …) plus standard envelope keys (token, distinct_id,
+// api_key). None of that is *your app's* data, so we don't flag it by key name —
+// otherwise every event lights up red and real leaks get lost in the noise. We
+// still scan their values for emails / long free text, since a leak is a leak
+// wherever it lands.
+const POSTHOG_STD_KEYS = new Set([
+  "token",
+  "distinct_id",
+  "api_key",
+  "timestamp",
+  "uuid",
+  "type",
+  "event",
+  "sent_at",
+  "library",
+  "library_version",
+]);
 
 /** Walk a value tree and collect human-readable leak warnings. */
 function scan(distinctId, properties) {
@@ -52,10 +70,11 @@ function scan(distinctId, properties) {
       val.forEach((v, i) => visit(v, `${path}[${i}]`));
     } else if (typeof val === "object") {
       for (const [k, v] of Object.entries(val)) {
-        // PostHog's own $-prefixed metadata (e.g. $lib, $current_url) is noise
-        // for a leak audit but we still flag a sensitive *key* if it carries a
-        // value, since that's exactly the mistake we want to catch.
-        if (SENSITIVE_KEY_RE.test(k) && v != null && v !== "") {
+        // Flag a sensitive *key name* only for your-app keys — skip PostHog's
+        // own $-prefixed metadata and standard envelope keys. Values are still
+        // walked below, so an email or free-text leak inside a $-key is caught.
+        const isSystemKey = k.startsWith("$") || POSTHOG_STD_KEYS.has(k);
+        if (!isSystemKey && SENSITIVE_KEY_RE.test(k) && v != null && v !== "") {
           warnings.push(`property "${path ? path + "." : ""}${k}" matches a sensitive name`);
         }
         visit(v, path ? `${path}.${k}` : k);
